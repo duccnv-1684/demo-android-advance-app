@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">Demo Android Advance App</string>
+    <string name="action_use_linear_layout_manager">Use Linear Layout Manager</string>
+    <string name="action_use_grid_layout_manager">Use Grid Layout Manager</string>
+    <string name="action_use_staggered_grid_layout_manager">Use Staggered Grid Layout Manager</string>
 </resources>
