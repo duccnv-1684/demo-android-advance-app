@@ -3,4 +3,7 @@
     <string name="action_use_linear_layout_manager">Use Linear Layout Manager</string>
     <string name="action_use_grid_layout_manager">Use Grid Layout Manager</string>
     <string name="action_use_staggered_grid_layout_manager">Use Staggered Grid Layout Manager</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>
