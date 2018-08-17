@@ -3,6 +3,7 @@ package com.example.ducnguyen.demoandroidadvanceapp;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
@@ -15,6 +16,8 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -27,15 +30,18 @@ public class DemoStorageActivity extends AppCompatActivity {
     private ImageAdapter mDemoRecyclerLinearAdapter;
     private RecyclerView.LayoutManager mLayoutManager;
     private List<Image> mImages;
+    private ProgressBar mProgressBar;
+    private LoadImagesTask mLoadImagesTask;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mImages = new ArrayList<>();
-        checkPermissionAndLoadData();
         mRecyclerView = findViewById(R.id.recycler_main);
-        mDemoRecyclerLinearAdapter = new ImageAdapter(mImages, R.layout.item_hero_linear);
+        mProgressBar = findViewById(R.id.progress_bar_main);
+        mLoadImagesTask = new LoadImagesTask();
+        checkPermissionAndLoadData();
         mLayoutManager = new LinearLayoutManager(this);
         setUpRecycleView();
     }
@@ -81,7 +87,7 @@ public class DemoStorageActivity extends AppCompatActivity {
         switch (requestCode) {
             case PERMISSION_REQUEST_CODE:
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    loadImagesData();
+                    mLoadImagesTask.execute();
                 } else {
                     Toast.makeText(this, R.string.message_permission_denied
                             , Toast.LENGTH_SHORT).show();
@@ -91,10 +97,10 @@ public class DemoStorageActivity extends AppCompatActivity {
     }
 
     private void checkPermissionAndLoadData() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) loadImagesData();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) mLoadImagesTask.execute();
         else if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
                 == PackageManager.PERMISSION_GRANTED) {
-            loadImagesData();
+            mLoadImagesTask.execute();
         } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}
@@ -102,27 +108,39 @@ public class DemoStorageActivity extends AppCompatActivity {
         }
     }
 
-    private void loadImagesData() {
-        Cursor cursor = getContentResolver().query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                , null
-                , null
-                , null
-                , MediaStore.Images.Media.DEFAULT_SORT_ORDER
-        );
-        assert cursor != null;
-        cursor.moveToFirst();
-        while (!cursor.isAfterLast()) {
-            String data = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
-            Image image = new Image(data);
-            mImages.add(image);
-            cursor.moveToNext();
-        }
-        cursor.close();
-    }
-
     private void setUpRecycleView() {
         mRecyclerView.setLayoutManager(mLayoutManager);
         mRecyclerView.setAdapter(mDemoRecyclerLinearAdapter);
+    }
+
+    private class LoadImagesTask extends AsyncTask<Void, Void, Void> {
+        @Override
+        protected Void doInBackground(Void... voids) {
+            Cursor cursor = getContentResolver().query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    , null
+                    , null
+                    , null
+                    , MediaStore.Images.Media.DEFAULT_SORT_ORDER
+            );
+            assert cursor != null;
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                String data = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+                Image image = new Image(data);
+                mImages.add(image);
+                cursor.moveToNext();
+            }
+            cursor.close();
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            mProgressBar.setVisibility(View.GONE);
+            mRecyclerView.setVisibility(View.VISIBLE);
+            mDemoRecyclerLinearAdapter = new ImageAdapter(mImages, R.layout.item_hero_linear);
+            setUpRecycleView();
+        }
     }
 }
