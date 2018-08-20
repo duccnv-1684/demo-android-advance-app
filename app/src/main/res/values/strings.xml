@@ -7,4 +7,11 @@
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="message_permission_denied">Can\'t access storage: Permission denied!</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_next">Next</string>
+    <string name="action_previous">Previous</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_play_pause">Play/Pause</string>
+    <string name="_00_00">00:00</string>
 </resources>
