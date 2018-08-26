@@ -17,18 +17,15 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.support.annotation.RequiresApi;
-import android.widget.Toast;
+import android.util.Log;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MusicPlayerService extends Service implements MediaPlayer.OnPreparedListener
-        , MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnCompletionListener,
-        MediaPlayer.OnErrorListener {
-    public static final String ACTION_PLAYBACK_STATUS_CHANGED =
-            "com.example.ducnguyen.demoandroidadvanceapp.ACTION_PLAYBACK_STATUS_CHANGED";
-    public static final String EXTRA_PLAYBACK_STATUS = "isPlaying";
+public class MusicPlayerService extends Service
+        implements MediaPlayer.OnPreparedListener, MediaPlayer.OnSeekCompleteListener
+        , MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
     private static final String RESOURCE_PATH =
             "android.resource://com.example.ducnguyen.demoandroidadvanceapp/";
     private static final String ACTION_PREVIOUS =
@@ -52,8 +49,14 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
     private int mCurrentSongIndex;
     private int mPausedPosition;
     private boolean mIsPlaying;
+    private boolean mOldState, mIsSkipped;
+    private OnPlaybackStatusChangeListener mOnPlaybackStatusChangeListener;
 
     public MusicPlayerService() {
+    }
+
+    public void setOnPlaybackStatusChangeListener(OnPlaybackStatusChangeListener onPlaybackStatusChangeListener) {
+        this.mOnPlaybackStatusChangeListener = onPlaybackStatusChangeListener;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
@@ -85,6 +88,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         if (mMediaPlayer != null) {
             stopMusic();
             mMediaPlayer.release();
+            Log.e("ducnguyen", "destroy");
         }
     }
 
@@ -97,7 +101,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
 
     @Override
     public void onSeekComplete(MediaPlayer mediaPlayer) {
-
+        mOnPlaybackStatusChangeListener.updateCurrentTime(mMediaPlayer.getCurrentPosition());
     }
 
     @Override
@@ -124,6 +128,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
 
     private void playSong() {
         mMediaPlayer.reset();
+        mIsPlaying = false;
         try {
             mMediaPlayer.setDataSource(this, mListSongs.get(mCurrentSongIndex).getUri());
         } catch (IOException e) {
@@ -137,8 +142,15 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         if (!mMediaPlayer.isPlaying()) {
             mMediaPlayer.start();
             mIsPlaying = true;
-            broadcastPlaybackStatusChanged();
             startForeground(NOTIFICATION_ID, buildNotification());
+            if (mOnPlaybackStatusChangeListener != null) {
+                mOnPlaybackStatusChangeListener.playbackStatusChange(mIsPlaying);
+                mOnPlaybackStatusChangeListener.updateCurrentTime(0);
+                mOnPlaybackStatusChangeListener.updateSongImageAndDuration(mListSongs.get(mCurrentSongIndex).getPicture(), mMediaPlayer.getDuration());
+            }
+        }
+        if (mIsSkipped && !mOldState) {
+            pauseMusic();
         }
     }
 
@@ -148,13 +160,23 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
             mMediaPlayer.pause();
             mIsPlaying = false;
             mPausedPosition = mMediaPlayer.getCurrentPosition();
-            broadcastPlaybackStatusChanged();
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
                     .notify(NOTIFICATION_ID, buildNotification());
             stopForeground(false);
+            if (mOnPlaybackStatusChangeListener != null) {
+                mOnPlaybackStatusChangeListener.playbackStatusChange(mIsPlaying);
+            }
         }
 
     }
+
+    public void seekTo(int position) {
+        mMediaPlayer.seekTo(position);
+        if (!mIsPlaying){
+            mPausedPosition = position;
+        }
+    }
+
 
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
     private void resumeMusic() {
@@ -162,8 +184,10 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
             mMediaPlayer.seekTo(mPausedPosition);
             mMediaPlayer.start();
             mIsPlaying = true;
-            broadcastPlaybackStatusChanged();
             startForeground(NOTIFICATION_ID, buildNotification());
+            if (mOnPlaybackStatusChangeListener != null) {
+                mOnPlaybackStatusChangeListener.playbackStatusChange(mIsPlaying);
+            }
         }
     }
 
@@ -175,16 +199,24 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
             mIsPlaying = false;
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
                     .notify(NOTIFICATION_ID, buildNotification());
+            stopForeground(false);
+            if (mOnPlaybackStatusChangeListener != null) {
+                mOnPlaybackStatusChangeListener.playbackStatusChange(mIsPlaying);
+            }
         }
     }
 
     private void nextSong() {
         mCurrentSongIndex = mCurrentSongIndex == mListSongs.size() - 1 ? 0 : ++mCurrentSongIndex;
+        mOldState = mIsPlaying;
+        mIsSkipped = true;
         playSong();
     }
 
     private void previousSong() {
         mCurrentSongIndex = mCurrentSongIndex == 0 ? mListSongs.size() - 1 : --mCurrentSongIndex;
+        mOldState = mIsPlaying;
+        mIsSkipped = true;
         playSong();
     }
 
@@ -226,7 +258,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
                         , PendingIntent.FLAG_UPDATE_CURRENT);
         Bitmap picture = BitmapFactory
                 .decodeByteArray(mListSongs.get(mCurrentSongIndex).getPicture()
-                , 0, mListSongs.get(mCurrentSongIndex).getPicture().length);
+                        , 0, mListSongs.get(mCurrentSongIndex).getPicture().length);
         Notification.Builder builder = new Notification.Builder(this)
                 .setShowWhen(false)
                 .setStyle(new Notification.MediaStyle())
@@ -282,12 +314,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    private void broadcastPlaybackStatusChanged() {
-        Intent intent = new Intent(ACTION_PLAYBACK_STATUS_CHANGED);
-        intent.putExtra(EXTRA_PLAYBACK_STATUS, mIsPlaying);
-        sendBroadcast(intent);
-    }
-
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
     public void controlPlayPauseMusic() {
         if (mIsPlaying) pauseMusic();
@@ -306,5 +332,13 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         MusicPlayerService getService() {
             return MusicPlayerService.this;
         }
+    }
+
+    public interface OnPlaybackStatusChangeListener {
+        void playbackStatusChange(boolean isPlaying);
+
+        void updateCurrentTime(int position);
+
+        void updateSongImageAndDuration(byte[] songImage, int duration);
     }
 }
